@@ -1,0 +1,111 @@
+name: Python Virtual Environment Runner
+
+on:
+  workflow_call:
+    inputs:
+      region:
+        type: string
+      datapath:
+        type: string
+      extra_packages:
+        type: string
+      script_contents:
+        type: string
+        required: true
+      upload_dir:
+        type: string
+    outputs:
+      artifact_id:
+        description: GitHub ID of an Artifact
+        value: ${{ jobs.runner.outputs.artifact_id }}
+    secrets:
+      GH_APP_ID:
+        required: true
+      GH_APP_INSTALLATION_ID:
+        required: true
+      GH_APP_PRIVATE_KEY:
+        required: true
+
+env:
+  CACHE_DIR: /home/runner/_cache
+
+jobs:
+  runner:
+    runs-on:
+      group: Arc
+      labels: ${{ inputs.region == 'lambda' && 'azure-us' || inputs.region }}
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact_id }}
+    steps:
+      - name: GitHub login
+        id: auth
+        uses: TimoWilhelm/action-github-app-auth@v1.0.0
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          installation-id: ${{ secrets.GH_APP_INSTALLATION_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          set-git-credentials: true
+
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          token: ${{ steps.auth.outputs.access-token }}
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Download requirements
+        run: |
+          curl -LO https://raw.githubusercontent.com/FinAI-Project/containers/refs/heads/main/compass-runtime/requirements.txt
+
+      - name: Create virtual environment
+        env:
+          GITHUB_TOKEN: ${{ steps.auth.outputs.access-token }}
+          VIRTUAL_ENV: ${{ env.CACHE_DIR }}/${{ hashFiles('requirements.txt') }}/.venv
+          Data: ${{ inputs.datapath }}
+        run: |
+          mkdir -p $VIRTUAL_ENV
+          if [ ! -e "$(readlink -f $VIRTUAL_ENV/bin/python)" ]; then
+            rm -rf $VIRTUAL_ENV
+          fi
+          python -m venv $VIRTUAL_ENV
+          source $VIRTUAL_ENV/bin/activate
+
+          REQUIRED_VERSION=$(sed -n 's/finai==\([0-9.]*\).*/\1/p' requirements.txt)
+          if ! pip show finai 1>/dev/null 2>&1 || [ "$(pip show finai | grep -i '^Version:' | awk '{print $2}')" != "$REQUIRED_VERSION" ]; then
+            echo "::group::Download fenghe-nn"
+            ASSET_DATA=$(curl -sL -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" https://api.github.com/repos/FinAI-Project/fenghe-nn/releases/latest | jq -r '.assets[0]')
+            ASSET_NAME=$(echo $ASSET_DATA | jq -r '.name')
+            ASSET_URL=$(echo $ASSET_DATA | jq -r '.url')
+            mkdir -p packages
+            curl -Lo "packages/$ASSET_NAME" -H "Authorization: Bearer $GITHUB_TOKEN" -H "Accept: application/octet-stream" "$ASSET_URL"
+            echo "::endgroup::"
+          fi
+
+          echo "::group::Install dependencies"
+          pip install -r requirements.txt ${{ inputs.extra_packages }} --find-links=./packages --extra-index-url=https://pypi.nvidia.com
+          echo "::endgroup::"
+
+          if [ -f /scripts/model-init.sh ]; then
+            echo "::group::Setup runtime environment"
+            bash /scripts/model-init.sh
+            echo "::endgroup::"
+          fi
+
+      - name: Run scripts
+        env:
+          VIRTUAL_ENV: ${{ env.CACHE_DIR }}/${{ hashFiles('requirements.txt') }}/.venv
+        run: ${{ inputs.script_contents }}
+
+      - name: Upload artifacts
+        id: upload
+        uses: actions/upload-artifact@v6
+        if: inputs.upload_dir != ''
+        with:
+          name: python-venv-${{ github.run_id }}
+          path: ${{ inputs.upload_dir }}
+          retention-days: 1
+          overwrite: true
