@@ -1,0 +1,101 @@
+name: Run Model 4.0
+
+on:
+  workflow_call:
+    inputs:
+      batch:
+        type: string
+      datapath:
+        required: true
+        type: string
+      backtest:
+        type: string
+      task:
+        type: string
+      seed_set_config:
+        type: string
+      seeds:
+        type: string
+      config_name:
+        required: true
+        type: string
+      config_override:
+        type: string
+      region:
+        type: string
+      gpupool:
+        required: true
+        type: string
+      gpu_count:
+        type: string
+        default: "1"
+    secrets:
+      GH_APP_ID:
+        required: true
+      GH_APP_INSTALLATION_ID:
+        required: true
+      GH_APP_PRIVATE_KEY:
+        required: true
+
+jobs:
+  deploy-job:
+    runs-on:
+      group: ArcCD
+      labels: ${{ inputs.region }}
+    steps:
+      - name: GitHub login
+        id: auth
+        uses: TimoWilhelm/action-github-app-auth@v1.0.0
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          installation-id: ${{ secrets.GH_APP_INSTALLATION_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          set-git-credentials: true
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.auth.outputs.access-token }}
+          submodules: true
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Deploy Kubernetes Job
+        env:
+          VIRTUAL_ENV: ${{ runner.temp }}/.venv
+          INPUT_BATCH: ${{ inputs.batch }}
+          INPUT_BACKTEST: ${{ inputs.config_name == 'sanity' && 'sanity' || inputs.backtest }}
+          INPUT_TASK: ${{ inputs.config_name == 'sanity' && 'simple_full_short' || inputs.task }}
+          INPUT_SEED_SET_CONFIG: ${{ inputs.seed_set_config }}
+          INPUT_SEEDS: ${{ inputs.config_name == 'sanity' && 'seed-00' || inputs.seeds }}
+          INPUT_CONFIG_NAME: ${{ inputs.config_name }}
+          INPUT_CONFIG_OVERRIDE: ${{ inputs.config_override }}
+          INPUT_REGION: ${{ inputs.region }}
+          INPUT_GPUPOOL: ${{ inputs.gpupool }}
+          INPUT_GPU_COUNT: ${{ inputs.gpu_count }}
+          JOB_MODEL_VERSION: v4
+          AWS_ECR_REGISTRY: 179138733276.dkr.ecr.us-west-2.amazonaws.com
+        run: |
+          echo "::group::Experiment Parameters"
+          echo "batch: ${{ inputs.batch }}"
+          echo "datapath: ${{ inputs.datapath }}"
+          echo "backtest: $INPUT_BACKTEST"
+          echo "task: $INPUT_TASK"
+          echo "seed set config: ${{ inputs.seed_set_config }}"
+          echo "seeds: $INPUT_SEEDS"
+          echo "config name: ${{ inputs.config_name }}"
+          echo "config override: ${{ inputs.config_override }}"
+          echo "region: ${{ inputs.region }}"
+          echo "gpupool: ${{ inputs.gpupool }}"
+          echo "gpu_count: ${{ inputs.gpu_count }}"
+          echo "::endgroup::"
+
+          # if [[ "${{ inputs.gpupool }}" == "blackwell" && "${{ inputs.region }}" != "aws-us" ]]; then
+          #     echo "Error: Blackwell GPU pool can only be used in aws-us region"
+          #     exit 1
+          # fi
+
+          python -m venv $VIRTUAL_ENV
+          source $VIRTUAL_ENV/bin/activate
+          pip install git+https://x-access-token:${{ steps.auth.outputs.access-token }}@github.com/FinAI-Project/compass-mlops.git@main
+          python app/single_job.py --data ${{ inputs.datapath }} --job-scheduler kubernetes

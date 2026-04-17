@@ -1,0 +1,92 @@
+name: Run Kubernetes Job
+
+on:
+  workflow_call:
+    inputs:
+      batch:
+        type: string
+      datapath:
+        type: string
+        required: true
+        default: /data/JP_end_2025-07-22/data_2
+      seeds:
+        type: string
+      runlevel:
+        type: string
+        required: true
+      region:
+        type: string
+        required: true
+      gpupool:
+        type: string
+        required: true
+    secrets:
+      GH_APP_ID:
+        required: true
+      GH_APP_INSTALLATION_ID:
+        required: true
+      GH_APP_PRIVATE_KEY:
+        required: true
+
+env:
+  CACHE_DIR: /home/runner/_cache
+
+jobs:
+  deploy-job:
+    runs-on:
+      group: Arc
+      labels: ${{ inputs.region == 'lambda' && 'azure-us' || inputs.region }}
+    steps:
+      - name: GitHub login
+        id: auth
+        uses: TimoWilhelm/action-github-app-auth@v1.0.0
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          installation-id: ${{ secrets.GH_APP_INSTALLATION_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          set-git-credentials: true
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.auth.outputs.access-token }}
+          submodules: true
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download requirements
+        run: curl -LO https://raw.githubusercontent.com/FinAI-Project/containers/refs/heads/main/compass-runtime/requirements.txt
+      - name: Create virtual environment
+        env:
+          VIRTUAL_ENV: ${{ env.CACHE_DIR }}/${{ hashFiles('requirements.txt') }}/.venv
+          Data: ${{ inputs.datapath }}
+        run: |
+          mkdir -p $VIRTUAL_ENV
+          if [ ! -e "$(readlink -f $VIRTUAL_ENV/bin/python)" ]; then
+            rm -rf $VIRTUAL_ENV
+          fi
+          python -m venv $VIRTUAL_ENV
+          source $VIRTUAL_ENV/bin/activate
+          pip install -r requirements.txt
+          pip install git+https://x-access-token:${{ steps.auth.outputs.access-token }}@github.com/FinAI-Project/compass-mlops.git@main
+          if [ -f /scripts/model-init.sh ]; then
+            bash /scripts/model-init.sh
+          fi
+      - name: Deploy Kubernetes Job
+        env:
+          VIRTUAL_ENV: ${{ env.CACHE_DIR }}/${{ hashFiles('requirements.txt') }}/.venv
+          INPUT_BATCH: ${{ inputs.batch }}
+          INPUT_REGION: ${{ inputs.region }}
+          INPUT_GPUPOOL: ${{ inputs.gpupool }}
+          AWS_ECR_REGISTRY: 179138733276.dkr.ecr.us-west-2.amazonaws.com
+        run: |
+          echo "::group::Experiment Parameters"
+          echo "batch: ${{ inputs.batch }}"
+          echo "datapath: ${{ inputs.datapath }}"
+          echo "seeds: ${{ inputs.seeds }}"
+          echo "runlevel: ${{ inputs.runlevel }}"
+          echo "region: ${{ inputs.region }}"
+          echo "gpupool: ${{ inputs.gpupool }}"
+          echo "::endgroup::"
+          source $VIRTUAL_ENV/bin/activate
+          python app/single_job.py --run-level ${{ inputs.runlevel }} --data ${{ inputs.datapath }} --seeds "${{ inputs.seeds }}" --job-scheduler kubernetes

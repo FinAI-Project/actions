@@ -1,0 +1,70 @@
+name: PR Merge Check
+
+on:
+  workflow_call:
+    secrets:
+      GH_APP_ID:
+        required: true
+      GH_APP_INSTALLATION_ID:
+        required: true
+      GH_APP_PRIVATE_KEY:
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CACHE_DIR: /home/runner/_cache
+
+jobs:
+  check:
+    runs-on:
+      group: Arc
+    steps:
+      - name: GitHub login
+        id: auth
+        uses: TimoWilhelm/action-github-app-auth@v1.0.0
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          installation-id: ${{ secrets.GH_APP_INSTALLATION_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+          set-git-credentials: true
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.auth.outputs.access-token }}
+          submodules: true
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download requirements
+        run: curl -LO https://raw.githubusercontent.com/FinAI-Project/containers/refs/heads/main/compass-runtime/requirements.txt
+      - name: Create virtual environment
+        env:
+          VIRTUAL_ENV: ${{ env.CACHE_DIR }}/${{ hashFiles('requirements.txt') }}/.venv
+        run: |
+          mkdir -p $VIRTUAL_ENV
+          if [ ! -e "$(readlink -f $VIRTUAL_ENV/bin/python)" ]; then
+            rm -rf $VIRTUAL_ENV
+          fi
+          python -m venv $VIRTUAL_ENV
+          source $VIRTUAL_ENV/bin/activate
+          pip install -r requirements.txt
+      - name: Run sanity test
+        env:
+          VIRTUAL_ENV: ${{ env.CACHE_DIR }}/${{ hashFiles('requirements.txt') }}/.venv
+          CUBLAS_WORKSPACE_CONFIG: :4096:8
+          # v4.x environment variables
+          TORCH_CUDA_ARCH_LIST: "7.5"
+          HYDRA_FULL_ERROR: "1"
+          DATA_SOURCE_PATH: /data/JP_end_2026-02-10/data
+          BACKTEST: sanity
+          TASK: simple_full_short
+          SEEDS: seed-00
+          CONFIG_NAME: sanity
+        run: |
+          source $VIRTUAL_ENV/bin/activate
+          cd ${{ runner.temp }}
+          make -f $GITHUB_WORKSPACE/app2/Makefile
