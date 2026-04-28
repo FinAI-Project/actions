@@ -90,12 +90,7 @@ jobs:
           echo "gpu_count: ${{ inputs.gpu_count }}"
           echo "::endgroup::"
 
-          # if [[ "${{ inputs.gpupool }}" == "blackwell" && "${{ inputs.region }}" != "aws-us" ]]; then
-          #     echo "Error: Blackwell GPU pool can only be used in aws-us region"
-          #     exit 1
-          # fi
-
           python -m venv $VIRTUAL_ENV
           source $VIRTUAL_ENV/bin/activate
-          pip install git+https://x-access-token:${{ steps.auth.outputs.access-token }}@github.com/FinAI-Project/compass-mlops.git@main
+          pip install git+https://x-access-token:${{ steps.auth.outputs.access-token }}@github.com/FinAI-Project/compass-mlops.git@feature/rclone-data
           python app/single_job.py --data ${{ inputs.datapath }} --job-scheduler kubernetes
