@@ -2,6 +2,10 @@ name: PR Merge Check
 
 on:
   workflow_call:
+    inputs:
+      data_path:
+        type: string
+        default: /data/HK_end_2026-03-31/data
     secrets:
       GH_APP_ID:
         required: true
@@ -10,15 +14,11 @@ on:
       GH_APP_PRIVATE_KEY:
         required: true
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 env:
   CACHE_DIR: /home/runner/_cache
 
 jobs:
-  check:
+  merge-check:
     runs-on:
       group: Arc
     steps:
@@ -57,12 +57,11 @@ jobs:
           VIRTUAL_ENV: ${{ env.CACHE_DIR }}/${{ hashFiles('requirements.txt') }}/.venv
           CUBLAS_WORKSPACE_CONFIG: :4096:8
           # v4.x environment variables
+          FENGHE_BUILD_DIR: ${{ env.CACHE_DIR }}/builds
           TORCH_CUDA_ARCH_LIST: "7.5"
+          CMAKE_CUDA_ARCHITECTURES: "75"
           HYDRA_FULL_ERROR: "1"
-          DATA_SOURCE_PATH: /data/JP_end_2026-02-10/data
-          BACKTEST: sanity
-          TASK: simple_full_short
-          SEEDS: seed-00
+          DATA_SOURCE_PATH: ${{ inputs.data_path }}
           CONFIG_NAME: sanity
         run: |
           source $VIRTUAL_ENV/bin/activate
