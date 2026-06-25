@@ -16,6 +16,10 @@ on:
         type: string
       seeds:
         type: string
+      cv_runs:
+        type: string
+      cross_validation:
+        type: string
       config_name:
         required: true
         type: string
@@ -68,6 +72,8 @@ jobs:
           INPUT_TASK: ${{ inputs.config_name == 'sanity' && 'simple_full_short' || inputs.task }}
           INPUT_SEED_SET_CONFIG: ${{ inputs.seed_set_config }}
           INPUT_SEEDS: ${{ inputs.config_name == 'sanity' && 'seed-00' || inputs.seeds }}
+          INPUT_CV_RUNS: ${{ inputs.cv_runs }}
+          INPUT_CROSS_VALIDATION: ${{ inputs.cross_validation }}
           INPUT_CONFIG_NAME: ${{ inputs.config_name }}
           INPUT_CONFIG_OVERRIDE: ${{ inputs.config_override }}
           INPUT_REGION: ${{ inputs.region }}
@@ -83,6 +89,8 @@ jobs:
           echo "task: $INPUT_TASK"
           echo "seed set config: ${{ inputs.seed_set_config }}"
           echo "seeds: $INPUT_SEEDS"
+          echo "cv_runs: ${{ inputs.cv_runs }}"
+          echo "cross_validation: ${{ inputs.cross_validation }}"
           echo "config name: ${{ inputs.config_name }}"
           echo "config override: ${{ inputs.config_override }}"
           echo "region: ${{ inputs.region }}"

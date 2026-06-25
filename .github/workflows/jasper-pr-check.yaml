@@ -6,6 +6,9 @@ on:
       data_path:
         type: string
         default: /data/HK_end_2026-03-31/data
+      config_name:
+        type: string
+        default: sanity
     secrets:
       GH_APP_ID:
         required: true
@@ -62,7 +65,7 @@ jobs:
           CMAKE_CUDA_ARCHITECTURES: "75"
           HYDRA_FULL_ERROR: "1"
           DATA_SOURCE_PATH: ${{ inputs.data_path }}
-          CONFIG_NAME: sanity
+          CONFIG_NAME: ${{ inputs.config_name }}
         run: |
           source $VIRTUAL_ENV/bin/activate
           cd ${{ runner.temp }}
