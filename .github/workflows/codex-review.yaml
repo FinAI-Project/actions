@@ -1,0 +1,57 @@
+name: Codex PR Review
+
+on:
+  workflow_call:
+    inputs:
+      pr_number:
+        type: number
+        required: true
+    secrets:
+      OPENAI_API_KEY:
+        required: true
+
+jobs:
+  codex-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/pull/${{ inputs.pr_number }}/merge
+          fetch-depth: 0
+
+      - name: Checkout actions repo
+        uses: actions/checkout@v6
+        with:
+          repository: FinAI-Project/actions
+          ref: main
+          fetch-depth: 0
+          path: .github/actions
+
+      - name: Run Codex review
+        id: codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-5.5
+          sandbox: read-only
+          prompt-file: .github/actions/prompt/codex-review.md
+
+      - name: Post review comment
+        if: steps.codex.outputs.final-message != ''
+        uses: actions/github-script@v7
+        env:
+          CODEX_REVIEW: ${{ steps.codex.outputs.final-message }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ inputs.pr_number }},
+              body: process.env.CODEX_REVIEW
+            })
