@@ -43,7 +43,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Download requirements
-        run: curl -LO https://raw.githubusercontent.com/FinAI-Project/containers/refs/heads/main/compass-runtime/requirements.txt
+        run: |
+          curl -fSLo requirements.txt \
+            -H "Accept: application/vnd.github.v3.raw" \
+            -H "Authorization: Bearer ${{ steps.auth.outputs.access-token }}" \
+            "https://api.github.com/repos/FinAI-Project/containers/contents/compass-runtime/requirements.txt?ref=main"
       - name: Create virtual environment
         env:
           VIRTUAL_ENV: ${{ env.CACHE_DIR }}/${{ hashFiles('requirements.txt') }}/.venv

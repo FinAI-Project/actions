@@ -10,6 +10,9 @@ on:
         required: false
         type: string
         default: .
+      extra_context:
+        required: false
+        type: string
       deploy_namespace:
         type: string
       deploy_name:
@@ -92,6 +95,7 @@ jobs:
           DOCKER_BUILD_RECORD_RETENTION_DAYS: 3
         with:
           context: ${{ inputs.build_context }}
+          build-contexts: ${{ inputs.extra_context }}
           load: true
           secrets: |
             GIT_AUTH_TOKEN=${{ steps.auth.outputs.access-token }}
@@ -122,26 +126,70 @@ jobs:
     runs-on:
       group: ArcCI
     steps:
+      - name: Get short commit hash
+        id: commit
+        run: |
+          sha_short=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "short=$sha_short" >> $GITHUB_OUTPUT
+
       - name: Set up kubectl
         uses: azure/setup-kubectl@v4
 
-      - name: Rollout restart deployment
-        id: restart
+      - name: Check deployment exists
+        id: check
         run: |
-          if kubectl get deployment -n ${{ inputs.deploy_namespace }} ${{ inputs.deploy_name }} > /dev/null 2>&1; then
-            kubectl rollout restart deployment -n ${{ inputs.deploy_namespace }} ${{ inputs.deploy_name }}
-            echo "success=true" >> $GITHUB_OUTPUT
+          if kubectl get -n ${{ inputs.deploy_namespace }} deployment/${{ inputs.deploy_name }} >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
           else
-            echo "${{ inputs.deploy_namespace }}/${{ inputs.deploy_name }} not exist, skipping restart"
-            echo "success=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Rollout restart deployment
+        id: deploy
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          echo "result=failure" >> $GITHUB_OUTPUT
+          echo "Restarting deployment..."
+          kubectl --field-manager=flux-client-side-apply \
+            rollout restart -n ${{ inputs.deploy_namespace }} deployment/${{ inputs.deploy_name }}
+
+          echo "Waiting for rollout to finish..."
+          if kubectl rollout status -n ${{ inputs.deploy_namespace }} deployment/${{ inputs.deploy_name }} --timeout=60s; then
+            echo "result=success" >> $GITHUB_OUTPUT
+            exit 0
           fi
 
       # https://docs.slack.dev/tools/slack-github-action/sending-techniques/sending-data-slack-incoming-webhook/
       - name: Slack notification
+        if: steps.check.outputs.exists == 'true'
         uses: slackapi/slack-github-action@v3
-        if: steps.restart.outputs.success == 'true'
         with:
           webhook: ${{ secrets.DEPLOY_SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            text: "*Deployment Update*\n`${{ inputs.deploy_namespace }}/${{ inputs.deploy_name }}` has been updated\nBranch: `${{ github.ref_name }}`\nCommit: `${{ github.sha }}`"
+            text: "[${{ inputs.deploy_namespace }}] ${{ inputs.deploy_name }} deployment ${{ steps.deploy.outputs.result == 'success' && 'succeeded' || 'failed' }}"
+            blocks:
+              - type: "section"
+                text:
+                  type: "mrkdwn"
+                  text: "${{ steps.deploy.outputs.result == 'success' && ':white_check_mark: *Deployment Successful*' || ':x: *Deployment Failed*' }}\n> *${{ inputs.deploy_namespace }}/${{ inputs.deploy_name }}*"
+                accessory:
+                  type: "button"
+                  text:
+                    type: "plain_text"
+                    text: "View Logs"
+                  url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+              - type: "section"
+                fields:
+                  - type: "mrkdwn"
+                    text: "*Status:*\n${{ steps.deploy.outputs.result == 'success' && ':rocket: Rolled out successfully' || ':warning: Rollout timed out or failed' }}"
+                  - type: "mrkdwn"
+                    text: "*Initiator:*\n${{ github.actor }}"
+              - type: "context"
+                elements:
+                  - type: "mrkdwn"
+                    text: "Branch: `${{ github.ref_name }}` | Commit: <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ steps.commit.outputs.short }}>"
+
+      - name: Fail job if deploy failed
+        if: steps.deploy.outputs.result == 'failure'
+        run: exit 1
