@@ -47,12 +47,12 @@ jobs:
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           set-git-credentials: true
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           token: ${{ steps.auth.outputs.access-token }}
           submodules: true
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Download requirements

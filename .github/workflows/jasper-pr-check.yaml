@@ -34,12 +34,12 @@ jobs:
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
           set-git-credentials: true
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           token: ${{ steps.auth.outputs.access-token }}
           submodules: true
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Download requirements
@@ -47,7 +47,7 @@ jobs:
           curl -fSLo requirements.txt \
             -H "Accept: application/vnd.github.v3.raw" \
             -H "Authorization: Bearer ${{ steps.auth.outputs.access-token }}" \
-            "https://api.github.com/repos/FinAI-Project/containers/contents/compass-runtime/requirements.txt?ref=main"
+            "https://api.github.com/repos/FinAI-Project/containers/contents/compass-runtime/requirements-v4.txt?ref=main"
       - name: Create virtual environment
         env:
           VIRTUAL_ENV: ${{ env.CACHE_DIR }}/${{ hashFiles('requirements.txt') }}/.venv

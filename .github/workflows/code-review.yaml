@@ -1,0 +1,98 @@
+name: Perform a code review
+
+on:
+  workflow_call:
+    inputs:
+      pr_number:
+        type: number
+        required: true
+      pr_comment:
+        type: string
+        default: ""
+    secrets:
+      OPENAI_API_KEY:
+        required: true
+      ANTHROPIC_API_KEY:
+        required: true
+
+jobs:
+  detect:
+    if: ${{ !endsWith(github.actor, '[bot]') }}
+    runs-on: ubuntu-latest
+    outputs:
+      command: ${{ steps.detect.outputs.command }}
+    steps:
+      - name: Detect review command
+        id: detect
+        env:
+          COMMENT: ${{ inputs.pr_comment }}
+        run: |
+          set -euo pipefail
+
+          DEFAULT_AGENT="codex"
+
+          normalized_comment="${COMMENT,,}"
+          normalized_comment="$(
+            printf '%s' "$normalized_comment" |
+              sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
+          )"
+
+          if [[ -z "$normalized_comment" ]]; then
+            normalized_comment="/review"
+          fi
+
+          read -r -a comment_parts <<< "$normalized_comment"
+
+          if [[ "${comment_parts[0]}" != "/review" ]]; then
+            echo "::error::Invalid comment. The command must start with /review."
+            echo "command=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "${#comment_parts[@]}" -eq 1 ]]; then
+            command="$DEFAULT_AGENT"
+          elif [[ "${#comment_parts[@]}" -eq 2 ]]; then
+            requested_agent="${comment_parts[1]}"
+
+            if [[ "$requested_agent" == "codex" || "$requested_agent" == "claude" ]]; then
+              command="$requested_agent"
+            else
+              echo "No supported review command found: $requested_agent"
+              echo "command=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          else
+            echo "::error::Invalid comment. Expected /review, /review codex, or /review claude."
+            echo "command=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Selected review model: $command"
+          echo "command=$command" >> "$GITHUB_OUTPUT"
+
+  codex:
+    needs: detect
+    if: needs.detect.outputs.command == 'codex'
+    uses: ./.github/workflows/codex-review.yaml
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    with:
+      pr_number: ${{ inputs.pr_number }}
+    secrets:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+  claude:
+    needs: detect
+    if: needs.detect.outputs.command == 'claude'
+    uses: ./.github/workflows/claude-code-review.yaml
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      issues: write
+    with:
+      pr_number: ${{ inputs.pr_number }}
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
