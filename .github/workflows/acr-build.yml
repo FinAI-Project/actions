@@ -72,15 +72,18 @@ jobs:
 
       - name: Set build variables
         id: build_vars
+        working-directory: ${{ inputs.build_context }}
         run: |
           az login --service-principal -u "$AZURE_CLIENT_ID" -t "$AZURE_TENANT_ID" --federated-token "$(cat "$AZURE_FEDERATED_TOKEN_FILE")"
           az acr login --name ${{ secrets.AZURE_CONTAINER_REGISTRY }}
 
-          TRIVY_IGNOREFILE=""
-          if [ -f ".trivyignore" ]; then
-            TRIVY_IGNOREFILE=".trivyignore"
+          if [ -f .trivyignore.yaml ]; then
+            echo "trivy_ignorefile=${{ inputs.build_context }}/.trivyignore.yaml" >> $GITHUB_OUTPUT
+          elif [ -f .trivyignore ]; then
+            echo "trivy_ignorefile=${{ inputs.build_context }}/.trivyignore" >> $GITHUB_OUTPUT
+          else
+            echo "trivy_ignorefile=" >> $GITHUB_OUTPUT
           fi
-          echo "trivy_ignorefile=$TRIVY_IGNOREFILE" >> $GITHUB_OUTPUT
 
       - name: Docker meta
         id: meta
@@ -115,6 +118,8 @@ jobs:
           severity: CRITICAL,HIGH
           timeout: 15m
           trivyignores: ${{ steps.build_vars.outputs.trivy_ignorefile }}
+          # https://trivy.dev/docs/latest/guide/configuration/skipping/
+          skip-files: /usr/local/lib/python*/site-packages/pip/_vendor/bom.cdx.json
 
       - name: Push Docker image
         run: |
@@ -167,24 +172,21 @@ jobs:
           webhook: ${{ secrets.DEPLOY_SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            text: "[${{ inputs.deploy_namespace }}] ${{ inputs.deploy_name }} deployment ${{ steps.deploy.outputs.result == 'success' && 'succeeded' || 'failed' }}"
-            blocks:
-              - type: "section"
-                text:
-                  type: "mrkdwn"
-                  text: "${{ steps.deploy.outputs.result == 'success' && ':white_check_mark: *Deployment Successful*' || ':x: *Deployment Failed*' }}\n> *${{ inputs.deploy_namespace }}/${{ inputs.deploy_name }}*"
-                accessory:
-                  type: "button"
-                  text:
-                    type: "plain_text"
-                    text: "View Logs"
-                  url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            text: "${{ steps.deploy.outputs.result == 'success' && ':white_check_mark: *Deployment Successful*' || ':x: *Deployment Failed*' }}: *${{ inputs.deploy_namespace }}/${{ inputs.deploy_name }}*"
+            attachments:
+            - blocks:
               - type: "section"
                 fields:
                   - type: "mrkdwn"
                     text: "*Status:*\n${{ steps.deploy.outputs.result == 'success' && ':rocket: Rolled out successfully' || ':warning: Rollout timed out or failed' }}"
                   - type: "mrkdwn"
                     text: "*Initiator:*\n${{ github.actor }}"
+                accessory:
+                  type: "button"
+                  text:
+                    type: "plain_text"
+                    text: "View Logs"
+                  url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
               - type: "context"
                 elements:
                   - type: "mrkdwn"

@@ -33,6 +33,9 @@ on:
       gpu_count:
         type: string
         default: "1"
+      priority:
+        type: string
+        default: low
     secrets:
       GH_APP_ID:
         required: true
@@ -79,6 +82,7 @@ jobs:
           INPUT_REGION: ${{ inputs.region }}
           INPUT_GPUPOOL: ${{ inputs.gpupool }}
           INPUT_GPU_COUNT: ${{ inputs.gpu_count }}
+          INPUT_PRIORITY: ${{ inputs.priority }}
           JOB_MODEL_VERSION: v4
           AWS_ECR_REGISTRY: 179138733276.dkr.ecr.us-west-2.amazonaws.com
         run: |
@@ -96,6 +100,7 @@ jobs:
           echo "region: ${{ inputs.region }}"
           echo "gpupool: ${{ inputs.gpupool }}"
           echo "gpu_count: ${{ inputs.gpu_count }}"
+          echo "priority: ${{ inputs.priority }}"
           echo "::endgroup::"
 
           python -m venv $VIRTUAL_ENV

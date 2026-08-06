@@ -31,7 +31,6 @@ jobs:
         with:
           ref: refs/pull/${{ inputs.pr_number }}/merge
           fetch-depth: 1
-          persist-credentials: false
 
       - name: Run Claude code review
         uses: anthropics/claude-code-action@v1
