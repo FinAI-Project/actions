@@ -28,12 +28,6 @@ on:
         required: true
       DOCKERHUB_TOKEN:
         required: true
-      AZURE_TENANT_ID:
-        required: true
-      AZURE_SUBSCRIPTION_ID:
-        required: true
-      AZURE_CLIENT_ID:
-        required: true
       AZURE_CONTAINER_REGISTRY:
         required: true
 
