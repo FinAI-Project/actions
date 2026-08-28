@@ -58,6 +58,8 @@ jobs:
         env:
           VIRTUAL_ENV: ${{ runner.temp }}/.venv
           INPUT_BATCH: ${{ inputs.batch }}
+          INPUT_SEEDS: ${{ inputs.seeds }}
+          INPUT_RUN_LEVEL: ${{ inputs.runlevel }}
           INPUT_REGION: ${{ inputs.region }}
           INPUT_GPUPOOL: ${{ inputs.gpupool }}
           AWS_ECR_REGISTRY: 179138733276.dkr.ecr.us-west-2.amazonaws.com

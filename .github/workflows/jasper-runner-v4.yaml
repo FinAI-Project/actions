@@ -6,8 +6,8 @@ on:
       batch:
         type: string
       datapath:
-        required: true
         type: string
+        required: true
       backtest:
         type: string
       task:
@@ -21,18 +21,21 @@ on:
       cross_validation:
         type: string
       config_name:
-        required: true
         type: string
+        required: true
       config_override:
         type: string
       region:
         type: string
       gpupool:
-        required: true
+        type: string
+      gpu_model:
         type: string
       gpu_count:
         type: string
         default: "1"
+      procs_per_gpu:
+        type: string
       priority:
         type: string
         default: low
@@ -43,12 +46,14 @@ on:
         required: true
       GH_APP_PRIVATE_KEY:
         required: true
+      RUNPOD_API_KEY:
+        required: true
+      EXPERIMENT_SLACK_WEBHOOK_URL:
+        required: true
 
 jobs:
   submit-job:
-    runs-on:
-      group: ArcCD
-      labels: ${{ inputs.region }}
+    runs-on: ${{ inputs.region == 'runpod' && fromJSON('{"group":"ArcCD"}') || fromJSON(format('{{"group":"ArcCD","labels":"{0}"}}', inputs.region)) }}
     steps:
       - name: GitHub login
         id: auth
@@ -67,7 +72,7 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - name: Deploy Kubernetes Job
+      - name: Submit Job
         env:
           VIRTUAL_ENV: ${{ runner.temp }}/.venv
           INPUT_BATCH: ${{ inputs.batch }}
@@ -81,9 +86,13 @@ jobs:
           INPUT_CONFIG_OVERRIDE: ${{ inputs.config_override }}
           INPUT_REGION: ${{ inputs.region }}
           INPUT_GPUPOOL: ${{ inputs.gpupool }}
+          INPUT_GPU_MODEL: ${{ inputs.gpu_model }}
           INPUT_GPU_COUNT: ${{ inputs.gpu_count }}
+          INPUT_PROCS_PER_GPU: ${{ inputs.procs_per_gpu }}
           INPUT_PRIORITY: ${{ inputs.priority }}
           JOB_MODEL_VERSION: v4
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.EXPERIMENT_SLACK_WEBHOOK_URL }}
           AWS_ECR_REGISTRY: 179138733276.dkr.ecr.us-west-2.amazonaws.com
         run: |
           echo "::group::Experiment Parameters"
@@ -99,7 +108,9 @@ jobs:
           echo "config override: ${{ inputs.config_override }}"
           echo "region: ${{ inputs.region }}"
           echo "gpupool: ${{ inputs.gpupool }}"
+          echo "gpu_model: ${{ inputs.gpu_model }}"
           echo "gpu_count: ${{ inputs.gpu_count }}"
+          echo "procs_per_gpu: ${{ inputs.procs_per_gpu }}"
           echo "priority: ${{ inputs.priority }}"
           echo "::endgroup::"
 

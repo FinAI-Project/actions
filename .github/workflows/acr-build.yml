@@ -4,14 +4,12 @@ on:
   workflow_call:
     inputs:
       image_name:
-        required: true
         type: string
+        required: true
       build_context:
-        required: false
         type: string
         default: .
       extra_context:
-        required: false
         type: string
       deploy_namespace:
         type: string
@@ -27,12 +25,6 @@ on:
       DOCKERHUB_USERNAME:
         required: true
       DOCKERHUB_TOKEN:
-        required: true
-      AZURE_TENANT_ID:
-        required: true
-      AZURE_SUBSCRIPTION_ID:
-        required: true
-      AZURE_CLIENT_ID:
         required: true
       AZURE_CONTAINER_REGISTRY:
         required: true
@@ -159,7 +151,7 @@ jobs:
             rollout restart -n ${{ inputs.deploy_namespace }} deployment/${{ inputs.deploy_name }}
 
           echo "Waiting for rollout to finish..."
-          if kubectl rollout status -n ${{ inputs.deploy_namespace }} deployment/${{ inputs.deploy_name }} --timeout=60s; then
+          if kubectl rollout status -n ${{ inputs.deploy_namespace }} deployment/${{ inputs.deploy_name }} --timeout=120s; then
             echo "result=success" >> $GITHUB_OUTPUT
             exit 0
           fi
@@ -172,15 +164,15 @@ jobs:
           webhook: ${{ secrets.DEPLOY_SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
-            text: "${{ steps.deploy.outputs.result == 'success' && ':white_check_mark: *Deployment Successful*' || ':x: *Deployment Failed*' }}: *${{ inputs.deploy_namespace }}/${{ inputs.deploy_name }}*"
+            text: "${{ steps.deploy.outputs.result == 'success' && ':white_check_mark: *Deployment Successful*' || ':warning: *Deployment Rollout Warning*' }}: *${{ inputs.deploy_namespace }}/${{ inputs.deploy_name }}*"
             attachments:
             - blocks:
               - type: "section"
                 fields:
-                  - type: "mrkdwn"
-                    text: "*Status:*\n${{ steps.deploy.outputs.result == 'success' && ':rocket: Rolled out successfully' || ':warning: Rollout timed out or failed' }}"
-                  - type: "mrkdwn"
-                    text: "*Initiator:*\n${{ github.actor }}"
+                - type: "mrkdwn"
+                  text: "*Status:*\n${{ steps.deploy.outputs.result == 'success' && ':rocket: Rolled out successfully' || ':warning: Rollout timed out or failed' }}"
+                - type: "mrkdwn"
+                  text: "*Initiator:*\n${{ github.actor }}"
                 accessory:
                   type: "button"
                   text:
