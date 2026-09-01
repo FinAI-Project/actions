@@ -53,7 +53,14 @@ on:
 
 jobs:
   submit-job:
-    runs-on: ${{ inputs.region == 'runpod' && fromJSON('{"group":"ArcCD"}') || fromJSON(format('{{"group":"ArcCD","labels":"{0}"}}', inputs.region)) }}
+    runs-on: >-
+      ${{
+        inputs.region == 'runpod'
+        && fromJSON('{"group":"ArcCD"}')
+        || startsWith(inputs.region, 'azure-')
+        && fromJSON(format('{{"group":"ArcCD","labels":"{0}-cd"}}', inputs.region))
+        || fromJSON(format('{{"group":"ArcCD","labels":"{0}"}}', inputs.region))
+      }}
     steps:
       - name: GitHub login
         id: auth

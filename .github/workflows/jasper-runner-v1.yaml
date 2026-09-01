@@ -1,0 +1,86 @@
+name: Run Model 1.0
+
+on:
+  workflow_call:
+    inputs:
+      job_name:
+        type: string
+        required: true
+      datapath:
+        type: string
+        required: true
+      latest:
+        type: string
+        default: "TRUE"
+      region:
+        type: string
+      gpu_model:
+        type: string
+      gpu_count:
+        type: string
+        default: "1"
+      priority:
+        type: string
+        default: low
+    secrets:
+      GH_APP_ID:
+        required: true
+      GH_APP_INSTALLATION_ID:
+        required: true
+      GH_APP_PRIVATE_KEY:
+        required: true
+      RUNPOD_API_KEY:
+        required: true
+      EXPERIMENT_SLACK_WEBHOOK_URL:
+        required: true
+
+jobs:
+  submit-job:
+    runs-on: >-
+      ${{
+        inputs.region == 'runpod'
+        && fromJSON('{"group":"ArcCD"}')
+        || startsWith(inputs.region, 'azure-')
+        && fromJSON(format('{{"group":"ArcCD","labels":"{0}-cd"}}', inputs.region))
+        || fromJSON(format('{{"group":"ArcCD","labels":"{0}"}}', inputs.region))
+      }}
+    steps:
+      - name: GitHub login
+        id: auth
+        uses: TimoWilhelm/action-github-app-auth@v1.0.0
+        with:
+          app-id: ${{ secrets.GH_APP_ID }}
+          installation-id: ${{ secrets.GH_APP_INSTALLATION_ID }}
+          private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          repository: FinAI-Project/compass-mlops
+          token: ${{ steps.auth.outputs.access-token }}
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+      - name: Submit Job
+        env:
+          INPUT_BATCH: model-1.0-prod
+          INPUT_LATEST: ${{ inputs.latest }}
+          INPUT_REGION: ${{ inputs.region }}
+          INPUT_GPU_MODEL: ${{ inputs.gpu_model }}
+          INPUT_GPU_COUNT: ${{ inputs.gpu_count }}
+          INPUT_PRIORITY: ${{ inputs.priority }}
+          JOB_MODEL_VERSION: v1
+          RUNPOD_API_KEY: ${{ secrets.RUNPOD_API_KEY }}
+          SLACK_WEBHOOK_URL: ${{ secrets.EXPERIMENT_SLACK_WEBHOOK_URL }}
+          AWS_ECR_REGISTRY: 179138733276.dkr.ecr.us-west-2.amazonaws.com
+        run: |
+          echo "::group::Experiment Parameters"
+          echo "job_name: ${{ inputs.job_name }}"
+          echo "datapath: ${{ inputs.datapath }}"
+          echo "latest: ${{ inputs.latest }}"
+          echo "region: ${{ inputs.region }}"
+          echo "gpu_model: ${{ inputs.gpu_model }}"
+          echo "gpu_count: ${{ inputs.gpu_count }}"
+          echo "priority: ${{ inputs.priority }}"
+          echo "::endgroup::"
+
+          uv sync --locked --no-dev --no-editable
+          uv run python -m compass_mlops.job.submit --data ${{ inputs.datapath }} --parent-id ${{ inputs.job_name }}
