@@ -20,6 +20,7 @@ concurrency:
 jobs:
   review:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
@@ -92,7 +93,7 @@ jobs:
 
       - name: Run Codex review
         id: codex
-        uses: openai/codex-action@v1
+        uses: openai/codex-action@v1.11
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: ${{ inputs.model }}
