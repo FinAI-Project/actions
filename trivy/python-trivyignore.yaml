@@ -1,0 +1,17 @@
+vulnerabilities:
+  - id: GHSA-6v7p-g79w-8964
+    purls:
+      - "pkg:pypi/msgpack@1.1.2"
+    statement: >-
+      msgpack 1.1.2 is present only as code vendored inside the system pip
+      installation. The production application does not invoke pip.
+    expired_at: 2026-12-31
+
+  - id: CVE-2025-47273
+    purls:
+      - "pkg:pypi/setuptools@70.3.0"
+    statement: >-
+      setuptools 70.3.0 is inferred from pip vendoring metadata.
+      The affected PackageIndex execution path is not used by the production
+      application.
+    expired_at: 2026-12-31
