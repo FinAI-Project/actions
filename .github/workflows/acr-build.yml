@@ -64,10 +64,16 @@ jobs:
 
       - name: Set build variables
         id: build_vars
+        env:
+          WORKFLOW_REF: ${{ job.workflow_ref }}
         working-directory: ${{ inputs.build_context }}
         run: |
           az login --service-principal -u "$AZURE_CLIENT_ID" -t "$AZURE_TENANT_ID" --federated-token "$(cat "$AZURE_FEDERATED_TOKEN_FILE")"
           az acr login --name ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+
+          if [ -f "pyproject.toml" ] || [ -f "requirements.txt" ]; then
+            curl -Lo .trivyignore.yaml "https://raw.githubusercontent.com/${{ job.workflow_repository }}/${WORKFLOW_REF##*@}/trivy/python-trivyignore.yaml"
+          fi
 
           if [ -f .trivyignore.yaml ]; then
             echo "trivy_ignorefile=${{ inputs.build_context }}/.trivyignore.yaml" >> $GITHUB_OUTPUT
