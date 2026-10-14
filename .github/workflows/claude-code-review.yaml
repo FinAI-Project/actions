@@ -19,7 +19,8 @@ concurrency:
 
 jobs:
   review:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: ArcCI
     timeout-minutes: 10
     permissions:
       id-token: write

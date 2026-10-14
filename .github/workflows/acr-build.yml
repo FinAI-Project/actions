@@ -32,7 +32,7 @@ on:
 jobs:
   acr-build:
     runs-on:
-      group: ArcCI
+      group: ArcDind
     steps:
       - name: GitHub login
         id: auth

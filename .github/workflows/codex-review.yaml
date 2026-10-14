@@ -19,7 +19,8 @@ concurrency:
 
 jobs:
   review:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: ArcCI
     timeout-minutes: 10
     permissions:
       contents: read
@@ -98,7 +99,7 @@ jobs:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           model: ${{ inputs.model }}
           permission-profile: ":read-only"
-          safety-strategy: drop-sudo
+          safety-strategy: unsafe
           prompt: |
             This is PR #${{ inputs.pr_number }} for ${{ github.repository }}.
 
@@ -145,7 +146,8 @@ jobs:
   report:
     needs: review
     if: needs.review.outputs.final_message != ''
-    runs-on: ubuntu-latest
+    runs-on:
+      group: ArcCI
     permissions:
       contents: read
       pull-requests: write

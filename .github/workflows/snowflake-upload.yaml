@@ -1,0 +1,73 @@
+name: Upload Python Bundle to Snowflake
+
+on:
+  workflow_call:
+    inputs:
+      files:
+        description: Files and directories to bundle
+        required: true
+        type: string
+      environment:
+        description: GitHub Environment
+        required: false
+        type: string
+        default: snowflake-upload
+    secrets:
+      SNOWFLAKE_ACCOUNT:
+        required: true
+      SNOWFLAKE_STAGE:
+        required: true
+
+concurrency:
+  group: snowflake-upload-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-upload:
+    name: Build and Upload Python Bundle
+    runs-on:
+      group: ArcCI
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Install Snowflake CLI
+        uses: snowflakedb/snowflake-actions@v3
+        env:
+          UV_CONCURRENT_DOWNLOADS: "4"
+        with:
+          use-oidc: true
+
+      - name: Build and Upload Python Bundle
+        shell: bash
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_STAGE: ${{ secrets.SNOWFLAKE_STAGE }}
+          BUNDLE_FILES: ${{ inputs.files }}
+        run: |
+          set -euo pipefail
+
+          : "${SNOWFLAKE_ACCOUNT:?SNOWFLAKE_ACCOUNT is required}"
+          : "${SNOWFLAKE_STAGE:?SNOWFLAKE_STAGE is required}"
+
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+          REF_NAME="${GITHUB_REF_NAME//\//-}"
+          BUNDLE_OUTPUT="${RUNNER_TEMP}/${REF_NAME}.zip"
+
+          mapfile -t FILES < <(
+            printf '%s\n' "$BUNDLE_FILES" | sed '/^[[:space:]]*$/d'
+          )
+
+          ((${#FILES[@]} > 0)) || { echo "No files specified"; exit 1; }
+
+          zip -q -X -r "$BUNDLE_OUTPUT" "${FILES[@]}"
+
+          snow stage copy "$BUNDLE_OUTPUT" "${SNOWFLAKE_STAGE%/}/${REPO_NAME}/" --overwrite -x

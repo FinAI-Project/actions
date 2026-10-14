@@ -18,7 +18,8 @@ on:
 jobs:
   detect:
     if: ${{ !endsWith(github.actor, '[bot]') }}
-    runs-on: ubuntu-latest
+    runs-on:
+      group: ArcCI
     outputs:
       command: ${{ steps.detect.outputs.command }}
     steps:
