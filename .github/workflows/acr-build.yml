@@ -71,8 +71,11 @@ jobs:
           az login --service-principal -u "$AZURE_CLIENT_ID" -t "$AZURE_TENANT_ID" --federated-token "$(cat "$AZURE_FEDERATED_TOKEN_FILE")"
           az acr login --name ${{ secrets.AZURE_CONTAINER_REGISTRY }}
 
+          TRIVYIGNORE_BASE="https://raw.githubusercontent.com/${{ job.workflow_repository }}/${WORKFLOW_REF##*@}/trivy"
           if [ -f "pyproject.toml" ] || [ -f "requirements.txt" ]; then
-            curl -Lo .trivyignore.yaml "https://raw.githubusercontent.com/${{ job.workflow_repository }}/${WORKFLOW_REF##*@}/trivy/python-trivyignore.yaml"
+            curl -fsSL -o .trivyignore.yaml "${TRIVYIGNORE_BASE}/python-trivyignore.yaml"
+          elif [ -f "package.json" ]; then
+            curl -fsSL -o .trivyignore.yaml "${TRIVYIGNORE_BASE}/nodejs-trivyignore.yaml"
           fi
 
           if [ -f .trivyignore.yaml ]; then
